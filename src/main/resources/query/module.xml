@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="module">
+	
+	<!-- 사용자 정보 호출 -->
+	<select id="getProfile" parameterType="String" resultType="jj.stella.entity.vo.ProfileVo">
+		SELECT u.idx AS ino, u.originId AS id, i.name,
+			JSON_OBJECT("ino", d.idx, "str", d.str) AS department,
+			CASE WHEN g.str = "GROUP_ROOT" THEN TRUE ELSE FALSE END AS rtu,
+			CASE
+				WHEN EXISTS(
+					<include refid="AuthMapper.getAuthzById" />
+					WHERE authz.auth = "ROLE_SETTING_OPTIONS"
+				) THEN TRUE
+				ELSE FALSE
+			END AS hasRole
+		FROM user AS u
+		INNER JOIN user_info AS i ON u.idx = i.userIdx
+		INNER JOIN department AS d ON i.departIdx = d.idx
+		INNER JOIN `group` AS g ON u.groupIdx = g.idx
+		WHERE u.originId = #{usr}
+	</select>
+	
+</mapper>

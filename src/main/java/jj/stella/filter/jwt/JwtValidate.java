@@ -32,10 +32,11 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jj.stella.entity.AuthVo;
+import jj.stella.entity.vo.security.UserVo;
+import jj.stella.entity.vo.security.ValidateVo;
 
 public class JwtValidate extends OncePerRequestFilter {
-	
+
 	private static final String USER_AGENT = "User-Agent";
 //	private static final String USER_DEVICE = "User-Device";
 	private static final String XHR_HEADER = "X-Requested-With";
@@ -98,21 +99,21 @@ public class JwtValidate extends OncePerRequestFilter {
 		};
 		
 		/** 토큰이 존재하면 검증로직 실행 */
-		AuthVo auth = validateToken(request, token);
-		token = auth.getToken();
+		ValidateVo validate = validateToken(request, token);
+		token = validate.getToken();
 		
-		if(auth.isVerify()) {
+		if(validate.isVerify()) {
 			
 			/** 검증이 완료되면 인증정보 Security 설정 */
-			authenticated(token, auth);
+			authenticated(token, validate);
 			
 			/** Cookie, Redis 갱신 */
-			setAuth(response, token, auth.getJti(), auth.isReissue());
+			setAuth(response, token, validate.getJti(), validate.isReissue());
 			
 			/** Spring Security 로직 실행 */
 			chain.doFilter(request, response);
 			
-		} else invalidTokenResponse(request, response, auth);
+		} else invalidTokenResponse(request, response, validate);
 		
 	};
 	
@@ -191,9 +192,9 @@ public class JwtValidate extends OncePerRequestFilter {
 	};
 	
 	/** 검증로직 실행 */
-	private AuthVo validateToken(HttpServletRequest request, String token) {
+	private ValidateVo validateToken(HttpServletRequest request, String token) {
 		
-		AuthVo auth = new AuthVo();
+		ValidateVo validate = new ValidateVo();
 		RestTemplate template = new RestTemplate();
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
@@ -205,45 +206,58 @@ public class JwtValidate extends OncePerRequestFilter {
 		try {
 			
 			HttpEntity<String> entity = new HttpEntity<>("", headers);
-			ResponseEntity<AuthVo> response = template.exchange(
-				AUTH_SERVER, HttpMethod.GET, entity, AuthVo.class
+			ResponseEntity<ValidateVo> response = template.exchange(
+				AUTH_SERVER, HttpMethod.GET, entity, ValidateVo.class
 			);
 			
-			AuthVo body = response.getBody();
-			
-			auth.setReissue(body.isReissue());
-			auth.setId(body.getId());
-			auth.setJti(body.getJti());
-			auth.setAuthz(body.getAuthz());
-			auth.setToken(body.getToken());
-			auth.setVerify(true);
+			ValidateVo body = response.getBody();
+			validate.setReissue(body.isReissue());
+			validate.setId(body.getId());
+			validate.setJti(body.getJti());
+			validate.setAuthz(body.getAuthz());
+			validate.setToken(body.getToken());
+			validate.setVerify(true);
 			
 		} catch(HttpClientErrorException e) {
-			auth.setVerify(false);
-			auth.setWaiting(false);
-			auth.setMessage(e.getResponseBodyAsString());
+			e.printStackTrace();
+			validate.setVerify(false);
+			validate.setWaiting(false);
+			validate.setMessage(e.getResponseBodyAsString());
 		} catch(RestClientException e) {
-			auth.setVerify(false);
-			auth.setWaiting(true);
-			auth.setMessage(AUTH_SERVER_ERROR_MESSAGE);
+			e.printStackTrace();
+			validate.setVerify(false);
+			validate.setWaiting(true);
+			validate.setMessage(AUTH_SERVER_ERROR_MESSAGE);
 		}
 		
-		return auth;
+		return validate;
 		
 	};
 	
 	/** 검증로직이 통과된 경우 인증정보를 만들어서 적용 */
-	private void authenticated(String token, AuthVo auth) {
+	private void authenticated(String token, ValidateVo validate) {
 		
-		List<SimpleGrantedAuthority> authz = Arrays.stream(auth.getAuthz().split(", "))
-				.map(String::trim) // 공백 제거
-				.map(role -> new SimpleGrantedAuthority(role)) // 각 역할을 SimpleGrantedAuthority 객체로 변환
-				.collect(Collectors.toList());
+		String group = validate.getAuthz().getUserGroup();
+		List<SimpleGrantedAuthority> roles = validate.getAuthz().getRoles()
+			/** List에 대한 스트림 생성 */
+			.stream()
+			/** RoleVo 객체에서 역할 이름을 가져와 SimpleGrantedAuthority 객체로 변환 */
+			.map(role -> new SimpleGrantedAuthority(role.getStr()))
+			.collect(Collectors.toList());
 		
-		User principal = new User(auth.getId(), token, authz);
+		List<String> roleGroups = validate.getAuthz().getRoleGroups()
+			.stream().map(role -> role.getStr()).collect(Collectors.toList());
+		
+		User principal = new UserVo(validate.getId(), token, true, true, true, true, group, roleGroups, roles);
 		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-			principal, token, principal.getAuthorities()
+			principal, token, roles
 		);
+
+//		User principal = new User(auth.getId(), token, authz);
+//		User principal = new UserVo(username, authGroups, userGroups);
+//		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+//			auth.getId(), token, authz
+//		);
 		
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		
@@ -284,11 +298,11 @@ public class JwtValidate extends OncePerRequestFilter {
 	};
 	
 	/** 검증로직이 실패한 경우 응답 반환 */
-	private void invalidTokenResponse(HttpServletRequest request, HttpServletResponse response, AuthVo auth) throws IOException {
+	private void invalidTokenResponse(HttpServletRequest request, HttpServletResponse response, ValidateVo validate) throws IOException {
 		/** 검증실패 */
-		if(!auth.isWaiting()) unauthorizedResponse(response, isXHRRequest(request), auth.getMessage());
+		if(!validate.isWaiting()) unauthorizedResponse(response, isXHRRequest(request), validate.getMessage());
 		/** 서버연결 실패 */
-		else disconnectAuthServerResponse(response, isXHRRequest(request), auth.getMessage());
+		else disconnectAuthServerResponse(response, isXHRRequest(request), validate.getMessage());
 	};
 	
 	private void disconnectAuthServerResponse(HttpServletResponse response, boolean isXHR, String str) throws IOException {

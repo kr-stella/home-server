@@ -1,4 +1,4 @@
-package jj.stella.util;
+package jj.stella.util.redis;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
