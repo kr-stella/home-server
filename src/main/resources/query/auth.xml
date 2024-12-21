@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="AuthMapper">
+	<sql id="getAuthzById">
+		SELECT authz.auth
+		FROM (
+			SELECT a.str AS auth
+			FROM user AS u INNER JOIN group_authority_group AS gag ON u.groupIdx = gag.groupIdx
+				INNER JOIN authority_group AS ag ON gag.authGroupIdx = ag.idx
+				INNER JOIN authority_group_authority AS aga ON ag.idx = aga.authGroupIdx
+				INNER JOIN authority AS a ON aga.authIdx = a.idx
+				<!-- deny인 경우 -->
+				LEFT JOIN authority_group_override AS ago ON u.idx = ago.userIdx AND ag.idx = ago.authGroupIdx AND ago.status = "deny"
+				<!-- deny인 경우 -->
+				LEFT JOIN authority_override AS ao ON u.idx = ao.userIdx AND a.idx = ao.authIdx AND ao.status = "deny"
+			WHERE u.originId = #{id}
+				<!-- 이 권한 그룹이 명시적으로 거부된 경우를 제외 -->
+				AND ago.userIdx IS NULL
+				<!-- 이 권한이 명시적으로 거부된 경우를 제외 -->
+				AND ao.userIdx IS NULL
+			
+			UNION ALL
+			
+			<!-- 사용자에게 명시적으로 허용된 권한 그룹을 통해 부여받은 권한 조회. 명시적으로 거부된 권한은 제외. -->
+			SELECT a.str AS auth
+			FROM user AS u INNER JOIN authority_group_override AS ago ON u.idx = ago.userIdx AND ago.status = "allow"
+				INNER JOIN authority_group AS ag ON ago.authGroupIdx = ag.idx
+				INNER JOIN authority_group_authority AS aga ON ag.idx = aga.authGroupIdx
+				INNER JOIN authority AS a ON aga.authIdx = a.idx
+				LEFT JOIN authority_override AS ao ON u.idx = ao.userIdx AND a.idx = ao.authIdx AND ao.status = "deny"
+			WHERE u.originId = #{id}
+				<!-- 이 권한이 명시적으로 거부된 경우를 제외 -->
+				AND ao.userIdx IS NULL
+			
+			UNION ALL
+			
+			<!-- 사용자에게 명시적으로 허용된 개별 권한 조회. -->
+			SELECT a.str AS auth
+			FROM user AS u INNER JOIN authority_override AS ao ON u.idx = ao.userIdx AND ao.status = "allow"
+				INNER JOIN authority AS a ON ao.authIdx = a.idx
+			WHERE u.originId = #{id}
+		) AS authz
+	</sql>
+	<sql id="getAuthzByIndex">
+		SELECT authz.auth
+		FROM (
+			SELECT a.str AS auth
+			FROM user AS u INNER JOIN group_authority_group AS gag ON u.groupIdx = gag.groupIdx
+				INNER JOIN authority_group AS ag ON gag.authGroupIdx = ag.idx
+				INNER JOIN authority_group_authority AS aga ON ag.idx = aga.authGroupIdx
+				INNER JOIN authority AS a ON aga.authIdx = a.idx
+				<!-- deny인 경우 -->
+				LEFT JOIN authority_group_override AS ago ON u.idx = ago.userIdx AND ag.idx = ago.authGroupIdx AND ago.status = "deny"
+				<!-- deny인 경우 -->
+				LEFT JOIN authority_override AS ao ON u.idx = ao.userIdx AND a.idx = ao.authIdx AND ao.status = "deny"
+			WHERE u.idx = #{usr}
+				<!-- 이 권한 그룹이 명시적으로 거부된 경우를 제외 -->
+				AND ago.userIdx IS NULL
+				<!-- 이 권한이 명시적으로 거부된 경우를 제외 -->
+				AND ao.userIdx IS NULL
+			
+			UNION ALL
+			
+			<!-- 사용자에게 명시적으로 허용된 권한 그룹을 통해 부여받은 권한 조회. 명시적으로 거부된 권한은 제외. -->
+			SELECT a.str AS auth
+			FROM user AS u INNER JOIN authority_group_override AS ago ON u.idx = ago.userIdx AND ago.status = "allow"
+				INNER JOIN authority_group AS ag ON ago.authGroupIdx = ag.idx
+				INNER JOIN authority_group_authority AS aga ON ag.idx = aga.authGroupIdx
+				INNER JOIN authority AS a ON aga.authIdx = a.idx
+				LEFT JOIN authority_override AS ao ON u.idx = ao.userIdx AND a.idx = ao.authIdx AND ao.status = "deny"
+			WHERE u.idx = #{usr}
+				<!-- 이 권한이 명시적으로 거부된 경우를 제외 -->
+				AND ao.userIdx IS NULL
+			
+			UNION ALL
+			
+			<!-- 사용자에게 명시적으로 허용된 개별 권한 조회. -->
+			SELECT a.str AS auth
+			FROM user AS u INNER JOIN authority_override AS ao ON u.idx = ao.userIdx AND ao.status = "allow"
+				INNER JOIN authority AS a ON ao.authIdx = a.idx
+			WHERE u.idx = #{usr}
+		) AS authz
+	</sql>
+	<sql id="getDepartById">
+		SELECT d.idx
+		FROM user AS u INNER JOIN user_info AS i ON u.idx = i.userIdx
+			INNER JOIN department AS d ON i.departIdx = d.idx
+		WHERE u.originId = #{id}
+	</sql>
+</mapper>
