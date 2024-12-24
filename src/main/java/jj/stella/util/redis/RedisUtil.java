@@ -32,7 +32,7 @@ public class RedisUtil {
 	};
 	
 	/**
-	 * 데이터 저장 (시간 제한 없음)
+	 * 데이터 저장( 시간 제한 없음 )
 	 * @param key   Redis 키
 	 * @param value 저장할 값
 	*/
@@ -41,10 +41,10 @@ public class RedisUtil {
 	};
 	
 	/**
-	 * 데이터 저장 (시간 제한 있음)
+	 * 데이터 저장( 시간 제한 있음 )
 	 * @param key      Redis 키
 	 * @param value    저장할 값
-	 * @param timeout  만료 시간 (초 단위)
+	 * @param timeout  만료 시간( 초 단위 )
 	*/
 	public void save(String key, Object value, long timeout) {
 		redisTemplate.opsForValue().set(key, value, timeout, TimeUnit.SECONDS);
@@ -71,7 +71,7 @@ public class RedisUtil {
 	 * 키의 만료 시간 조회
 	 * @param key 조회할 키
 	 * @param unit 시간 단위
-	 * @return 만료 시간 (지정된 시간 단위)
+	 * @return 만료 시간( 지정된 시간 단위 )
 	*/
 	public long getExpire(String key, TimeUnit unit) {
 		return redisTemplate.getExpire(key, unit);
